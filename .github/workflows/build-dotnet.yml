@@ -1,0 +1,65 @@
+name: Build SharpShares
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * *'   # every day, 06:00 UTC (00:00/01:00 your time, DST-dependent)
+  push:
+    branches:
+      - master
+    paths:
+      - "SharpShares/**"
+      - "SharpShares.sln"
+      - ".github/workflows/build-sharpshares.yml"
+  pull_request:
+    branches:
+      - master
+    paths:
+      - "SharpShares/**"
+      - "SharpShares.sln"
+      - ".github/workflows/build-sharpshares.yml"
+
+jobs:
+  build:
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up MSBuild
+        uses: microsoft/setup-msbuild@v3
+
+      - name: Retarget .NET Framework 4.0 to 4.8
+        shell: powershell
+        run: |
+          $project = "SharpShares\SharpShares.csproj"
+
+          if (-not (Test-Path $project)) {
+              Write-Error "SharpShares.csproj not found"
+              exit 1
+          }
+
+          (Get-Content $project -Raw) `
+            -replace '<TargetFrameworkVersion>v4\.0</TargetFrameworkVersion>',
+                     '<TargetFrameworkVersion>v4.8</TargetFrameworkVersion>' |
+            Set-Content $project
+
+      - name: Build SharpShares
+        shell: cmd
+        run: >
+          msbuild "SharpShares.sln"
+          /t:Rebuild
+          /p:Configuration=Release
+          /p:Platform="Any CPU"
+          /m
+
+      - name: Upload SharpShares executable
+        uses: actions/upload-artifact@v6
+        with:
+          name: SharpShares-dotnet
+          path: |
+            SharpShares/bin/Release/SharpShares.exe
+            SharpShares/bin/Release/SharpShares.exe.config
+            SharpShares/bin/Release/SharpShares.pdb
+          if-no-files-found: error
